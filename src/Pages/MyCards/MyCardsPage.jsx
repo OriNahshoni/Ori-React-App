@@ -1,0 +1,173 @@
+import { useEffect, useState } from "react";
+import { Container, Grid, Typography, useTheme } from "@mui/material";
+import nextKey from "generate-my-key";
+import CardComponent from "../../components/CardComponent";
+import { useNavigate } from "react-router-dom";
+import ROUTES from "../../routes/ROUTES";
+import axios from "axios";
+import { useSelector } from "react-redux";
+import AuthTokenService from "../../service/authTokenService";
+import myCardsNormalization from "./myCardsNormalization"; // Import the normalization file
+import { toast } from "react-toastify";
+import MoreInfoComponent from "../../components/MoreInfoComponent";
+
+const MyCardsPage = () => {
+  const [myCards, setMyCards] = useState([]);
+  const navigate = useNavigate();
+  const userData = useSelector((bigPie) => bigPie.authSlice.userData);
+  const isLoggedIn = AuthTokenService.isUserLoggedIn();
+  const [selectedCard, setSelectedCard] = useState(null);
+  const theme = useTheme();
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      axios
+        .get("/cards/my-cards")
+        .then(({ data }) => {
+          const myCardsData = myCardsNormalization(data, userData?._id);
+          setMyCards(myCardsData);
+        })
+        .catch((err) => {
+          console.error("Error fetching cards:", err);
+        });
+    }
+  }, [isLoggedIn, userData?._id]);
+  const isAuth = () => {
+    if (isLoggedIn && (userData.isBusiness || userData.isAdmin)) {
+      return true;
+    } else return false;
+  };
+  const handleDeleteCard = (_id) => {
+    axios
+      .delete(`/cards/${_id}`)
+      .then(() => {
+        setMyCards((myCardsCopy) =>
+          myCardsCopy.filter((card) => card._id !== _id)
+        );
+        toast.success("Card deleted successfully! 😁", {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+        });
+      })
+      .catch((error) => {
+        toast.error("Error deleting the card ❌", {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+        });
+        console.error("Error deleting card:", error);
+      });
+  };
+
+  const handleEditCard = (_id) => {
+    const cardToEdit = myCards.find((card) => card._id === _id);
+    if (cardToEdit && cardToEdit.user_id === userData?._id) {
+      navigate(`${ROUTES.EDITCARD}/${_id}`);
+    } else {
+      toast.error("You can only edit your own cards! 🚫", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "light",
+      });
+    }
+  };
+
+  const handleLikeCard = (_id) => {
+    setMyCards((myCardsCopy) =>
+      myCardsCopy.map((card) =>
+        card._id === _id ? { ...card, likes: !card.likes } : card
+      )
+    );
+    axios
+      .patch(`/cards/${_id}`, {
+        likes: !myCards.find((card) => card._id === _id).likes,
+      })
+      .then(() => {})
+      .catch((error) => {
+        toast.error("Error liking the card ❌", {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+        });
+        console.error("Error liking card:", error);
+      });
+  };
+
+  const handleShowDetails = (cardDetails) => {
+    setSelectedCard(cardDetails);
+  };
+
+  const handleCloseDetails = () => {
+    setSelectedCard(null);
+  };
+
+  return (
+    <Container>
+      <Typography variant="h2" fontFamily="lucida" textAlign="center">
+        Welcome to Your Created Cards Page!
+      </Typography>
+      <Typography
+        textAlign="center"
+        sx={{
+          marginBottom: 3,
+          [theme.breakpoints.down("sm")]: {},
+        }}
+      >
+        Explore and manage the cards you've created. Make any edits or deletions
+        as needed.
+      </Typography>
+      <Grid container spacing={2}>
+        {myCards.map((card) => (
+          <Grid item key={nextKey()} xs={12} sm={6} md={4} lg={3}>
+            <CardComponent
+              _id={card._id}
+              title={card.title}
+              subTitle={card.subtitle}
+              description={card.description}
+              phone={card.phone}
+              address={`${card.address.city}, ${card.address.street} ${card.address.houseNumber}`}
+              img={card.image.url}
+              alt={card.image.alt}
+              like={card.likes}
+              onDeleteCard={handleDeleteCard}
+              onEditCard={handleEditCard}
+              onLikeCard={handleLikeCard}
+              isLoggedIn={isLoggedIn}
+              isAuth={isAuth}
+              userData={userData}
+              onShowDetails={handleShowDetails}
+            />
+          </Grid>
+        ))}
+        {selectedCard && (
+          <MoreInfoComponent
+            cardDetails={selectedCard}
+            onClose={handleCloseDetails}
+          />
+        )}
+      </Grid>
+    </Container>
+  );
+};
+export default MyCardsPage;
